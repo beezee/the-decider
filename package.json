@@ -5,12 +5,12 @@
   "dependencies": {
     "daggy": "^1.3.0",
     "ramda": "^0.26.1",
-    "rc-slider": "^8.6.4",
     "react": "^16.7.0",
     "react-datasheet": "^1.3.10",
     "react-dom": "^16.7.0",
-    "react-editable-list-component": "^0.1.0",
-    "react-scripts": "2.1.2"
+    "react-numeric-input": "^2.2.3",
+    "react-scripts": "2.1.2",
+    "react-sparklines": "^1.7.0"
   },
   "scripts": {
     "start": "react-scripts start",

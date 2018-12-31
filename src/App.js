@@ -1,9 +1,11 @@
 import * as daggy from 'daggy';
 import './App.css';
+import 'rc-slider/assets/index.css';
 import React, { Component } from 'react';
 import ReactDataSheet from 'react-datasheet';
 import 'react-datasheet/lib/react-datasheet.css';
 import * as R from 'ramda';
+import NumericInput from 'react-numeric-input';
 
 // foldMap :: Monoid b -> (a -> b) -> [a] -> b
 const foldMap = (m) => (f) =>
@@ -47,12 +49,17 @@ const InputField = daggy.taggedSum('InputField', {
   FCScore: ['factor', 'choice', 'value']
 });
 
-const storePath = (input) =>
-  input.cata({
-    FCWeight: (factor, concern) => ['fcWeights', factor, concern],
-    FWeight: choice => ['fWeights', choice],
-    FCScore: (factor, choice) => ['fcScores', factor, choice]
-  });
+const storePath = {
+  FCWeight: (factor, concern) => ['fcWeights', factor, concern],
+  FWeight: choice => ['fWeights', choice],
+  FCScore: (factor, choice) => ['fcScores', factor, choice]
+};
+
+const editorParams = {
+  FCWeight: () => [1, 5],
+  FWeight: () => [1, 5],
+  FCScore: () => [-3, 3]
+};
 
 const fcWeightGrid = (state) =>
   R.map(c =>
@@ -95,9 +102,9 @@ const choiceScores = (state) =>
 
 const headers = (state) =>
   R.compose(
-    R.prepend({readOnly: true, value: ""}),
-    R.append({readOnly: true, value: "Totals"}))(
-    R.map((f) => ({readOnly: true, value: f}))(state.factors));
+    R.prepend({readOnly: true, width: '10em', value: ""}),
+    R.append({readOnly: true, width: '10em', value: "Totals"}))(
+    R.map((f) => ({readOnly: true, width: '10em', value: f}))(state.factors));
 
 const sep = (state) =>
   R.repeat({readOnly: true, value: ""})(state.factors.length + 2);
@@ -125,11 +132,18 @@ class App extends Component {
       <div className="App">
         <ReactDataSheet
           data={grid(this.state)}
-          valueRenderer={(cell) => cell.value}
+          width={10}
+          valueRenderer={R.prop('value')}
+          dataEditor={(props) => {
+            const [min, max] = props.cell.cata(editorParams);
+            return (<NumericInput min={min} max={max} step={1} 
+              value={props.value}
+              onChange={(v) => 
+                props.onChange(R.max(min, R.min(max, v)))} />); }}
           onCellsChanged={changes => {
             const upd = foldMap(ObjM)((o) =>
               ObjM(R.set(
-                R.lensPath(storePath(o.cell)), 
+                R.lensPath(o.cell.cata(storePath)), 
                 parseInt(o.value))({})))(changes);
             this.setState(ObjM.mappend(
               ObjM(this.state),
