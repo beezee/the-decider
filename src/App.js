@@ -56,7 +56,9 @@ const storePath = (input) =>
 
 const fcWeightGrid = (state) =>
   R.map(c =>
-   R.prepend({readOnly: true, value: c})(
+   R.compose(
+     R.prepend({readOnly: true, value: c}),
+     R.append({readOnly: true, value: concernTotal(c, state)}))(
     R.map(f =>
      InputField.FCWeight(f, c, 
        R.pathOr(1)([f, c])(state.fcWeights)))(
@@ -70,16 +72,22 @@ const fWeightRow = (state) =>
         R.propOr(1)(f)(state.fWeights)))(
       state.factors));
 
-const sumChoice = (c, state) =>
+const rowTotal = (ix, sk, state) => 
   foldMap(AddM)(f =>
-    AddM(R.pathOr(1)([f, c])(state.fcScores) *
+    AddM(R.pathOr(1)([f, ix])(state[sk]) *
          R.propOr(1)(f)(state.fWeights)))(state.factors).x;
+
+const choiceTotal = (c, state) =>
+  rowTotal(c, 'fcScores', state);
+
+const concernTotal = (c, state) =>
+  rowTotal(c, 'fcWeights', state);
 
 const choiceScores = (state) =>
   R.map(c =>
     R.compose(
       R.prepend({readOnly: true, value: `${c} Scores`}),
-      R.append({readOnly: true, value: sumChoice(c, state)}))(
+      R.append({readOnly: true, value: choiceTotal(c, state)}))(
         R.map((f) => InputField.FCScore(f, c,
           R.pathOr(1)([f, c])(state.fcScores)))(
         state.factors)))(
@@ -91,10 +99,15 @@ const headers = (state) =>
     R.append({readOnly: true, value: "Totals"}))(
     R.map((f) => ({readOnly: true, value: f}))(state.factors));
 
+const sep = (state) =>
+  R.repeat({readOnly: true, value: ""})(state.factors.length + 2);
+
 const grid = (state) =>
   R.compose(
     R.prepend(headers(state)), 
+    R.prepend(sep(state)),
     R.flip(R.concat)(choiceScores(state)),
+    R.append(sep(state)),
     R.append(fWeightRow(state)))(fcWeightGrid(state));
 
 class App extends Component {
