@@ -10,7 +10,7 @@
     "react-dom": "^16.7.0",
     "react-numeric-input": "^2.2.3",
     "react-scripts": "2.1.2",
-    "react-sparklines": "^1.7.0"
+    "recharts": "^1.4.2"
   },
   "scripts": {
     "start": "react-scripts start",

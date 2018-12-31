@@ -1,6 +1,6 @@
 import * as daggy from 'daggy';
 import './App.css';
-import 'rc-slider/assets/index.css';
+import { Pie, PieChart, Tooltip } from 'recharts';
 import React, { Component } from 'react';
 import ReactDataSheet from 'react-datasheet';
 import 'react-datasheet/lib/react-datasheet.css';
@@ -21,6 +21,11 @@ const ArrM = daggy.tagged('ArrM', ['x']);
 ArrM.mappend = (ma, mb) => ArrM(R.concat(ma.x, mb.x));
 ArrM.zero = ArrM([]);
 
+// Mult Monoid
+const MultM = daggy.tagged('MultM', ['x']);
+MultM.mappend = (ma, mb) => MultM(ma.x * mb.x);
+MultM.zero = MultM(1);
+
 // Add Monoid
 const AddM = daggy.tagged('AddM', ['x']);
 AddM.mappend = (ma, mb) => AddM(ma.x + mb.x);
@@ -39,6 +44,18 @@ AddM.zero = AddM(0);
 }
 
 const ArrObj = TupleM(ArrM, ObjM);*/
+
+// Monoid v => Map[k, Monoid v] Monoid
+const KV = (m) => {
+  const r = daggy.tagged('K -> ' + m.toString(), ['x']);
+  r.mappend = (kva , kvb) => 
+    r(R.mergeWith((x, y) => m.mappend(x, y))(kva.x)(kvb.x));
+  r.zero = r({});
+  return r;
+}
+
+// Monoid Map[String, AddM]
+const ObjAddM = KV(AddM);
 
 /* data InputField v = 
   FCWeight string string v |
@@ -80,6 +97,28 @@ const fWeightRow = (state) =>
       (f) => InputField.FWeight(f, 
         R.propOr(1)(f)(state.fWeights)))(
       state.factors));
+
+const breakDown = (fn) => (state) => 
+  R.compose(
+    R.map(R.zipObj(['name', 'value'])),
+    R.toPairs,
+    R.map(R.prop('x')))(
+      foldMap(ObjAddM)(f =>
+        ObjAddM(foldMap(ObjM)(c => 
+          ObjM(R.objOf(c, AddM(MultM.mappend(
+            MultM(R.pathOr(AddM.zero.x)([f, c])(state.fcWeights)),
+            foldMap(MultM)(i => MultM(i))(fn(f))).x))))(
+          state.concerns).x))(
+        state.factors).x);
+
+const choiceBreakdowns = (state) =>
+  R.fromPairs(R.map(c => [c, breakDown(
+      f => [R.propOr(1)(f)(state.fWeights),
+            R.pathOr(0)([f, c])(state.fcScores)])(state)])(
+    state.choices));
+
+const concernBreakdown = (state) =>
+  breakDown(f => [R.propOr(1)(f)(state.fWeights)])(state);
 
 const rowTotal = (ix, sk, state) => 
   foldMap(AddM)(f =>
@@ -148,11 +187,28 @@ class App extends Component {
               ObjM(R.set(
                 R.lensPath(o.cell.cata(storePath)), 
                 parseInt(o.value))({})))(changes);
-            this.setState(ObjM.mappend(
-              ObjM(this.state),
-              upd).x);
+            this.setState(R.mergeDeepRight(
+              this.state,
+              upd.x));
           }}
         />
+        <div style={{
+            marginTop: '4em', minWidth: '30em', 
+            minHeight: '20em'}}>
+          <PieChart width={800} height={400}>
+            <Pie title="Prioritization of concerns"
+              data={concernBreakdown(this.state)} 
+              dataKey='value'
+              cx={200} cy={200} innerRadius={10} 
+              outerRadius={20} fill="#82ca9d"/>
+            <Pie 
+              data={choiceBreakdowns(this.state).a} 
+              dataKey='value'
+              cx={500} cy={200} innerRadius={10} 
+              outerRadius={20} fill="#82ca9d"/>
+            <Tooltip />
+           </PieChart>
+        </div>
       </div>
     );
   }
