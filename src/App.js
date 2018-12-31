@@ -56,7 +56,7 @@ const storePath = {
 };
 
 const editorParams = {
-  FCWeight: () => [1, 5],
+  FCWeight: () => [0, 3],
   FWeight: () => [1, 5],
   FCScore: () => [-3, 3]
 };
@@ -68,12 +68,14 @@ const fcWeightGrid = (state) =>
      R.append({readOnly: true, value: concernTotal(c, state)}))(
     R.map(f =>
      InputField.FCWeight(f, c, 
-       R.pathOr(1)([f, c])(state.fcWeights)))(
+       R.pathOr(0)([f, c])(state.fcWeights)))(
      state.factors)))(
    state.concerns);
 
 const fWeightRow = (state) =>
-  R.prepend({readOnly: true, value: "Factor Weights"})(
+  R.compose(
+    R.append({readOnly: true, value: ""}),
+    R.prepend({readOnly: true, value: "Factor Weights"}))(
     R.map(
       (f) => InputField.FWeight(f, 
         R.propOr(1)(f)(state.fWeights)))(
@@ -81,7 +83,7 @@ const fWeightRow = (state) =>
 
 const rowTotal = (ix, sk, state) => 
   foldMap(AddM)(f =>
-    AddM(R.pathOr(1)([f, ix])(state[sk]) *
+    AddM(R.pathOr(0)([f, ix])(state[sk]) *
          R.propOr(1)(f)(state.fWeights)))(state.factors).x;
 
 const choiceTotal = (c, state) =>
@@ -96,7 +98,7 @@ const choiceScores = (state) =>
       R.prepend({readOnly: true, value: `${c} Scores`}),
       R.append({readOnly: true, value: choiceTotal(c, state)}))(
         R.map((f) => InputField.FCScore(f, c,
-          R.pathOr(1)([f, c])(state.fcScores)))(
+          R.pathOr(0)([f, c])(state.fcScores)))(
         state.factors)))(
     state.choices);
 
@@ -115,7 +117,8 @@ const grid = (state) =>
     R.prepend(sep(state)),
     R.flip(R.concat)(choiceScores(state)),
     R.append(sep(state)),
-    R.append(fWeightRow(state)))(fcWeightGrid(state));
+    R.append(fWeightRow(state)),
+    R.append(sep(state)))(fcWeightGrid(state));
 
 class App extends Component {
   state = {
