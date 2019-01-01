@@ -264,7 +264,7 @@ class App extends Component {
     return (
       <div className="App">
         <ImportField
-          onSubmit={(v) => this.setState(log(parseCsv(v)))} />
+          onSubmit={(v) => this.setState(parseCsv(v))} />
         <ReactDataSheet
           data={grid(this.state)}
           width={10}
