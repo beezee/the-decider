@@ -1,6 +1,6 @@
 import * as daggy from 'daggy';
 import './App.css';
-import { Cell, Pie, PieChart, Tooltip } from 'recharts';
+import { Cell, Legend, Pie, PieChart, Tooltip } from 'recharts';
 import NumericInput from 'react-numeric-input';
 import persist from 'react-localstorage-hoc';
 import React, { Component } from 'react';
@@ -129,15 +129,21 @@ const rowTotal = (ix, sk, state) =>
   reduceTotal(AddM)((f, i) =>
     R.pathOr(0)([f, ix])(state[sk]) * i)(state);
 
-const choiceFactorBreakdowns = (state) =>
+const factorBreakdowns = (src, ix) => (state) =>
   foldMap(ObjM)(c => 
     ObjM(R.objOf(c,
       R.compose(
         R.map(R.zipObj(['name', 'value'])),
         R.toPairs)(
       R.map(R.prop('x'))(reduceTotal(ObjAddM)((f, i) =>
-        R.objOf(f, AddM(i * R.pathOr(0)([f, c])(state.fcScores))))(
-        state))))))(state.choices).x;
+        R.objOf(f, AddM(i * R.pathOr(0)([f, c])(R.prop(ix)(state)))))(
+        state))))))(R.prop(src)(state)).x;
+
+const choiceFactorBreakdowns =
+  factorBreakdowns('choices', 'fcScores');
+
+const concernFactorBreakdowns =
+  factorBreakdowns('concerns', 'fcWeights');
 
 const choiceTotal = (c, state) =>
   rowTotal(c, 'fcScores', state);
@@ -251,7 +257,10 @@ class App extends Component {
   };
 
   render() {
-    console.log(choiceFactorBreakdowns(this.state));
+    const factorDistribution = R.merge(
+      choiceFactorBreakdowns(this.state),
+      concernFactorBreakdowns(this.state));
+    const concernShareByChoice = choiceBreakdowns(this.state);
     return (
       <div className="App">
         <ImportField
@@ -276,14 +285,30 @@ class App extends Component {
               upd.x));
           }}
         />
+        <div style={{marginTop: '2em', display: 'flex'}}>
+          <div style={{width: '450px'}}>
+            <b>Weighted Concerns</b>
+          </div>
+          <div>
+            <b>Concern distribution</b>
+            <div style={{display: 'flex'}}>
+              {this.state.choices.map((e, i) =>
+                (<div key={`cdl-${i}`} style={{width: '150px'}}>
+                  <b>{e}</b>
+                </div>))}
+            </div>
+          </div>
+        </div>
         <div style={{
-            marginTop: '4em', minWidth: '30em', 
-            minHeight: '20em'}}>
-          <PieChart width={300} height={200}>
-            <Pie title="Prioritization of concerns"
+            display: 'flex',
+            minWidth: '30em', 
+            minHeight: '11em'}}>
+          <PieChart width={300} height={150}>
+            <Pie 
               data={concernBreakdown(this.state)} 
               dataKey='value'
-              cx={50} cy={50} innerRadius={10} 
+              label
+              cx={150} cy={50} innerRadius={10} 
               outerRadius={20} fill="#82ca9d">
                 {concernBreakdown(this.state)
                   .map((_, i) => 
@@ -291,19 +316,78 @@ class App extends Component {
                       fill={this.colors[i % this.colors.length]}
                      />))}
             </Pie>
-            {R.toPairs(choiceBreakdowns(this.state)).map((e, i) =>
+            <Legend />
+          </PieChart>
+          <PieChart width={800} height={150}>
+            {R.toPairs(concernShareByChoice).map((e, i) =>
               (<Pie key={`cb-${i}`}
-                data={R.map(
-                  R.over(R.lensProp('name'))(
-                    (s) => `${s}->${e[0]}`))(e[1])}
+                data={e[1]}
                 dataKey='value'
-                cx={150+(50*i)} cy={50} innerRadius={10} 
+                label
+                cx={200+(150*i)} cy={50} innerRadius={10} 
                 outerRadius={20} fill="#82ca9d">
                   {e[1].map((_, i) => 
                       (<Cell  key={`c-${i}`}
                         fill={this.colors[i % this.colors.length]}
                        />))}
               </Pie >))}
+            <Tooltip />
+           </PieChart>
+        </div>
+        <div style={{marginTop: '2em'}}>
+          <div><b>Concern share by choice</b></div>
+          <div style={{display: 'flex'}}>
+            {this.state.concerns.map((e, i) =>
+              (<div key={`csbcl-${i}`} style={{width: '150px'}}>
+                <b>{e}</b>
+              </div>))}
+          </div>
+        </div>
+        <div style={{
+            display: 'flex',
+            minWidth: '30em', 
+            minHeight: '11em'}}>
+          <PieChart width={800} height={150}>
+            {this.state.concerns.map((e, i) =>
+              (<Pie key={`cchb-${i}`}
+                data={R.map(ch => 
+                  R.assoc('name', ch)(R.find(R.propEq('name', e))(
+                    concernShareByChoice[ch])))(this.state.choices)}
+                dataKey='value'
+                label
+                cx={50+(150*i)} cy={50} innerRadius={10} 
+                outerRadius={20} 
+                fill={this.colors[i % this.colors.length]} />))}
+            <Tooltip />
+           </PieChart>
+        </div>
+        <div style={{marginTop: '2em'}}>
+          <div style={{marginBottom: '1em'}}>
+            <b>Factor distribution</b>
+          </div>
+          <div style={{display: 'flex'}}>
+            <div style={{marginRight: '150px'}} />
+            {R.concat(this.state.choices, this.state.concerns)
+             .map((e, i) =>
+              (<div key={`fdl-${i}`} 
+                style={{marginRight: '250px'}}>
+                <b>{e}</b>
+              </div>))}
+          </div>
+        </div>
+        <div style={{
+            display: 'flex',
+            minWidth: '30em', 
+            minHeight: '15em'}}>
+          <PieChart width={4600} height={250}>
+            {R.concat(this.state.choices, this.state.concerns).map((e, i) =>
+              (<Pie key={`fd-${i}`}
+                data={factorDistribution[e]}
+                dataKey='value'
+                label
+                cx={150+(300*i)} cy={100} innerRadius={30} 
+                outerRadius={55} 
+                fill={this.colors[i - 2 % this.colors.length]} />))}
             <Tooltip />
            </PieChart>
         </div>
