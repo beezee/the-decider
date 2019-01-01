@@ -1,6 +1,6 @@
 import * as daggy from 'daggy';
 import './App.css';
-import { Pie, PieChart, Tooltip } from 'recharts';
+import { Cell, Pie, PieChart, Tooltip } from 'recharts';
 import React, { Component } from 'react';
 import ReactDataSheet from 'react-datasheet';
 import 'react-datasheet/lib/react-datasheet.css';
@@ -73,9 +73,9 @@ const storePath = {
 };
 
 const editorParams = {
-  FCWeight: () => [0, 3],
+  FCWeight: () => [0, 5],
   FWeight: () => [1, 5],
-  FCScore: () => [-3, 3]
+  FCScore: () => [-5, 5]
 };
 
 const fcWeightGrid = (state) =>
@@ -118,12 +118,25 @@ const choiceBreakdowns = (state) =>
     state.choices));
 
 const concernBreakdown = (state) =>
-  breakDown(f => [R.propOr(1)(f)(state.fWeights)])(state);
+  breakDown((f) => [R.propOr(1)(f)(state.fWeights)])(state);
 
-const rowTotal = (ix, sk, state) => 
-  foldMap(AddM)(f =>
-    AddM(R.pathOr(0)([f, ix])(state[sk]) *
-         R.propOr(1)(f)(state.fWeights)))(state.factors).x;
+const reduceTotal = (m) => (fn) => (state) => 
+  foldMap(m)(f =>
+    m(fn(f, R.propOr(1)(f)(state.fWeights))))(state.factors).x;
+
+const rowTotal = (ix, sk, state) =>
+  reduceTotal(AddM)((f, i) =>
+    R.pathOr(0)([f, ix])(state[sk]) * i)(state);
+
+const choiceFactorBreakdowns = (state) =>
+  foldMap(ObjM)(c => 
+    ObjM(R.objOf(c,
+      R.compose(
+        R.map(R.zipObj(['name', 'value'])),
+        R.toPairs)(
+      R.map(R.prop('x'))(reduceTotal(ObjAddM)((f, i) =>
+        R.objOf(f, AddM(i * R.pathOr(0)([f, c])(state.fcScores))))(
+        state))))))(state.choices).x;
 
 const choiceTotal = (c, state) =>
   rowTotal(c, 'fcScores', state);
@@ -159,17 +172,24 @@ const grid = (state) =>
     R.append(fWeightRow(state)),
     R.append(sep(state)))(fcWeightGrid(state));
 
+const log = R.tap(console.log);
 class App extends Component {
+  colors = R.map(_ => 
+    '#'+Math.floor(Math.random()*16777215).toString(16))(
+    R.repeat(null)(100));
+
   state = {
     factors: ['foo', 'bar'],
     concerns: ['baz', 'quux'],
     choices: ['a', 'b'],
     fcWeights: {},
     fWeights: {},
-    fcScores: {}
+    fcScores: {},
+    colors: () => this.colors
   };
 
   render() {
+    console.log(choiceFactorBreakdowns(this.state));
     return (
       <div className="App">
         <ReactDataSheet
@@ -195,17 +215,31 @@ class App extends Component {
         <div style={{
             marginTop: '4em', minWidth: '30em', 
             minHeight: '20em'}}>
-          <PieChart width={800} height={400}>
+          <PieChart width={300} height={200}>
             <Pie title="Prioritization of concerns"
               data={concernBreakdown(this.state)} 
               dataKey='value'
-              cx={200} cy={200} innerRadius={10} 
-              outerRadius={20} fill="#82ca9d"/>
-            <Pie 
-              data={choiceBreakdowns(this.state).a} 
-              dataKey='value'
-              cx={500} cy={200} innerRadius={10} 
-              outerRadius={20} fill="#82ca9d"/>
+              cx={50} cy={50} innerRadius={10} 
+              outerRadius={20} fill="#82ca9d">
+                {concernBreakdown(this.state)
+                  .map((_, i) => 
+                    (<Cell key={i}
+                      fill={this.colors[i % this.colors.length]}
+                     />))}
+            </Pie>
+            {R.toPairs(choiceBreakdowns(this.state)).map((e, i) =>
+              (<Pie key={`cb-${i}`}
+                data={R.map(
+                  R.over(R.lensProp('name'))(
+                    (s) => `${s}->${e[0]}`))(e[1])}
+                dataKey='value'
+                cx={150+(50*i)} cy={50} innerRadius={10} 
+                outerRadius={20} fill="#82ca9d">
+                  {e[1].map((_, i) => 
+                      (<Cell  key={`c-${i}`}
+                        fill={this.colors[i % this.colors.length]}
+                       />))}
+              </Pie >))}
             <Tooltip />
            </PieChart>
         </div>
