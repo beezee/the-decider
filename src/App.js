@@ -1,11 +1,12 @@
 import * as daggy from 'daggy';
 import './App.css';
 import { Cell, Pie, PieChart, Tooltip } from 'recharts';
+import NumericInput from 'react-numeric-input';
+import persist from 'react-localstorage-hoc';
 import React, { Component } from 'react';
 import ReactDataSheet from 'react-datasheet';
 import 'react-datasheet/lib/react-datasheet.css';
 import * as R from 'ramda';
-import NumericInput from 'react-numeric-input';
 
 // foldMap :: Monoid b -> (a -> b) -> [a] -> b
 const foldMap = (m) => (f) =>
@@ -172,7 +173,68 @@ const grid = (state) =>
     R.append(fWeightRow(state)),
     R.append(sep(state)))(fcWeightGrid(state));
 
+// factorXParse :: string -> [factor] -> [number] -> 
+//    Map[factor -> Map[string -> number]]
+const factorXParse = (c, vs, fs) =>
+  R.reduce((a, e) => 
+    R.assocPath([e[0], c])(e[1])(a))({})(R.zip(fs, vs));
+
+// TODO - when does IO become a thing?
+// parseCvRows :: [[string]] => (state - colors)
+const parseCsvRows = (rows) => {
+  if (R.head(R.head(rows)) !== "")
+    throw new Error("First column must be row labels \n" +
+      "Top left cell must be blank");
+  const factors = R.tail(R.head(rows));
+  const [concerns, choices] = R.splitWhen(
+    R.compose(
+      R.equals("factor weights"),
+      R.toLower))(
+    R.map(R.head)(R.tail(rows)));
+  if (R.isEmpty(choices))
+    throw new Error("No choices found. \n" +
+      "Concerns and choices must be separated by a " + 
+      "factor weight row, and the row must be labeled " +
+      "Factor Weights");
+  const parseGrid = R.compose(
+    R.reduce(R.mergeDeepRight, {}),
+    R.map(R.compose(
+      R.apply(factorXParse),
+      R.append(factors),
+      R.juxt([R.head, R.tail]))));
+  const fcWeights = parseGrid(R.take(concerns.length)(R.tail(rows)));
+  const fcScores = parseGrid(R.compose(
+    R.take(choices.length - 1),
+    R.drop(concerns.length + 1))(R.tail(rows)));
+  const fWeights = R.fromPairs(
+    R.compose(R.zip(factors), R.tail)(rows[concerns.length+1]));
+  return {
+    factors, concerns, 
+    choices: R.tail(choices),
+    fcWeights, fWeights, fcScores};
+}
+
+const parseCsv = (string) => 
+  parseCsvRows(string.split("\n").map(R.invoker(1, 'split')(",")));
+
 const log = R.tap(console.log);
+class ImportField extends Component {
+  state = {
+    value: ""
+  }
+  render() {
+    return (<div>
+      <textarea 
+        value={this.state.value}
+        onChange={(e) => this.setState({value: e.target.value})}
+      />
+      <button onClick={() => this.props.onSubmit(this.state.value)}>
+        Import CSV
+      </button>
+    </div>);
+  }
+}
+
 class App extends Component {
   colors = R.map(_ => 
     '#'+Math.floor(Math.random()*16777215).toString(16))(
@@ -192,6 +254,8 @@ class App extends Component {
     console.log(choiceFactorBreakdowns(this.state));
     return (
       <div className="App">
+        <ImportField
+          onSubmit={(v) => this.setState(log(parseCsv(v)))} />
         <ReactDataSheet
           data={grid(this.state)}
           width={10}
@@ -248,4 +312,4 @@ class App extends Component {
   }
 }
 
-export default App;
+export default persist(App);
